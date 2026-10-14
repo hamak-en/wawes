@@ -1,0 +1,53 @@
+name: Deploy to GitHub Pages
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/configure-pages@v5
+        id: pages
+      - run: npm run build
+        env:
+          PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: pages-browser-test-results
+          path: test-results/
+          if-no-files-found: ignore
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.ref == 'refs/heads/master'
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
