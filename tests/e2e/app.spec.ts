@@ -211,7 +211,7 @@ test('longitudinal particles, projections, presets and shared state work', async
   await page.locator('#viewport canvas').click();
   expect(await page.evaluate(() => window.wawes.sample(0, 0)?.displacement)).toBeCloseTo(0.001, 10);
   await page.screenshot({ path: test.info().outputPath('longitudinal-2d.png') });
-  await page.locator('#quantity').selectOption('windowMean');
+  await expect(page.locator('#quantity')).toBeHidden();
   await page.locator('#mode-3d').click();
   await page.locator('#step').click();
   await page.screenshot({ path: test.info().outputPath('longitudinal-3d.png') });
@@ -224,4 +224,58 @@ test('longitudinal particles, projections, presets and shared state work', async
   await page.getByLabel('Тип коливань').selectOption('transverse');
   await expect(page.locator('#gain-label')).toHaveText('Висота g');
   await expect(page.locator('#membrane-description')).toBeVisible();
+});
+
+test('all longitudinal views render, step and restore their controls', async ({ page }) => {
+  await page.getByLabel('Тип коливань').selectOption('longitudinal');
+  await page.getByLabel('Вигляд поздовжньої хвилі').selectOption('tracer');
+  await page.locator('#play-pause').click();
+  await page.screenshot({ path: test.info().outputPath('view-symmetry-trails.png') });
+  await page.getByLabel('Навчальні сцени').selectOption('standing');
+  await page.locator('#play-pause').click(); await page.locator('#reset-time').click();
+  for (const view of ['particles', 'spring', 'arrows', 'tracer']) {
+    await page.getByLabel('Вигляд поздовжньої хвилі').selectOption(view);
+    if (view === 'tracer') {
+      await page.locator('#tracer-x').fill('0.3'); await page.locator('#tracer-y').fill('-0.2');
+    }
+    await page.locator('#step').click();
+    await page.locator('.sidebar').evaluate(element => { element.scrollTop = 0; });
+    await page.screenshot({ path: test.info().outputPath(`view-${view}.png`) });
+    await expect(page.locator('#quantity')).toBeHidden();
+    await expect(page.locator('#height-scale')).toBeEnabled();
+  }
+  await page.locator('#step').click(); // Persist point coordinates and paused time before reload.
+  const state = await page.evaluate(() => window.wawes.state);
+  await page.reload(); await page.waitForFunction(() => window.wawes?.ready);
+  expect(await page.evaluate(() => window.wawes.state)).toEqual(state);
+  await expect(page.getByLabel('Вигляд поздовжньої хвилі')).toHaveValue('tracer');
+  await expect(page.locator('#tracer-x')).toHaveValue('0.3');
+  await expect(page.locator('#tracer-y')).toHaveValue('-0.2');
+  await page.locator('#mode-3d').click();
+  await page.getByLabel('Вигляд поздовжньої хвилі').selectOption('tracer');
+  await page.locator('#step').click();
+  await page.screenshot({ path: test.info().outputPath('view-trajectories-3d.png') });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  await page.screenshot({ path: test.info().outputPath('view-mobile.png') });
+});
+
+test('averaging modes are available only for transverse waves, including legacy scenes', async ({ page }) => {
+  await page.locator('#quantity').selectOption('windowMean');
+  await expect(page.locator('#average-window')).toBeVisible();
+  await page.getByLabel('Тип коливань').selectOption('longitudinal');
+  await expect(page.locator('#quantity-controls')).toBeHidden();
+  await expect(page.locator('#average-window')).toBeHidden();
+  expect(await page.evaluate(() => window.wawes.state.display.quantity)).toBe('displacement');
+  for (const view of ['particles', 'spring', 'arrows', 'tracer']) {
+    await page.locator('#longitudinal-view').selectOption(view);
+    await expect(page.locator('#quantity')).toBeHidden();
+  }
+  await page.evaluate(() => { const scene=window.wawes.state; scene.display.quantity='meanSquare'; window.wawes.load(scene); });
+  expect(await page.evaluate(() => window.wawes.state.display.quantity)).toBe('displacement');
+  await expect(page.locator('#legend-high')).toContainText('мм');
+  await page.getByLabel('Тип коливань').selectOption('transverse');
+  await expect(page.locator('#quantity')).toBeVisible();
+  await page.locator('#quantity').selectOption('windowMean');
+  await expect(page.locator('#average-window')).toBeVisible();
 });

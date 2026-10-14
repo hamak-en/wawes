@@ -1,6 +1,6 @@
 import type { SceneState, Wave } from '../state';
 import { MASK_RADIUS } from '../state';
-import { hankel1 } from './bessel';
+import { hankel0, hankel1 } from './bessel';
 import { sampleComplex, TAU } from './model';
 import type { Complex, FieldSample, PreparedWave } from './model';
 
@@ -51,4 +51,24 @@ export function sampleLongitudinalPrepared(prepared: PreparedWave[], x: number, 
 }
 export function sampleLongitudinal(scene: SceneState, x: number, y: number, time = scene.playback.time): LongitudinalSample | null {
   return sampleLongitudinalPrepared(prepareLongitudinal(scene, time), x, y, scene.display.averageWindow);
+}
+
+
+/** Linear compression −div(u), dimensionless. Positive means compression. */
+export function longitudinalCompression(p: PreparedWave, x: number, y: number): Complex | null {
+  const { wave: w, k, coefficient: [a, b] } = p;
+  if (!w.enabled || w.amplitude === 0) return [0, 0];
+  if (w.type === 'circular') {
+    const r = Math.hypot(x - w.x, y - w.y);
+    if (r < MASK_RADIUS) return null;
+    const [j, y0] = hankel0(k * r);
+    return [-k * (a * j - b * y0), -k * (a * y0 + b * j)];
+  }
+  const phase = k * (Math.cos(w.direction) * x + Math.sin(w.direction) * y);
+  const re = a * Math.cos(phase) - b * Math.sin(phase), im = a * Math.sin(phase) + b * Math.cos(phase);
+  return [k * im, -k * re];
+}
+export function compressionScale(scene: SceneState): number {
+  return scene.speed === 0 ? 1 : Math.max(1e-9, scene.waves.reduce((sum, w) =>
+    sum + (w.enabled ? w.amplitude * TAU * w.frequency / scene.speed : 0), 0));
 }

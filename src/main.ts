@@ -43,9 +43,10 @@ app.innerHTML = `
       </section>
       <section class="panel-block display-block">
         <div class="section-heading"><h2>Відображення</h2></div>
-        <label for="quantity" class="control-label">Фізична величина</label>
+        <div id="longitudinal-view-controls" hidden><label class="control-label" for="longitudinal-view">Вигляд поздовжньої хвилі</label><select id="longitudinal-view"><option value="particles">Частинки</option><option value="spring">Сітка пружин</option><option value="arrows">Стрілки зміщення</option><option value="tracer">Частинки з траекторіями</option></select><p id="longitudinal-view-description" class="muted small"></p><div id="tracer-controls" class="two-controls" hidden><label class="control-label" for="tracer-x">Частинка: x, м<input id="tracer-x" type="number" min="-5" max="5" step="any"></label><label class="control-label" for="tracer-y">Частинка: y, м<input id="tracer-y" type="number" min="-5" max="5" step="any"></label></div></div>
+        <div id="quantity-controls"><label for="quantity" class="control-label">Фізична величина</label>
         <select id="quantity"><option value="displacement">Миттєве зміщення u · м</option><option value="meanSquare">Середній квадрат ⟨u²⟩ · м²</option><option value="windowMean">Середній квадрат у вікні · м²</option></select>
-        <div id="average-control"><label class="control-label" for="average-window">Вікно усереднення τ <span>с</span></label><input id="average-window" type="number" min="0.01" max="20" step="0.01"></div>
+        <div id="average-control"><label class="control-label" for="average-window">Вікно усереднення τ <span>с</span></label><input id="average-window" type="number" min="0.01" max="20" step="0.01"></div></div>
         <div class="two-controls"><label class="control-label" for="color-scale">Шкала u · авто<span>± мм<input id="color-scale" type="number" readonly></span></label><label class="control-label" for="height-scale"><b id="gain-label" style="font-weight:inherit">Висота g</b><span>×<input id="height-scale" type="number" min="1" max="500" step="1"></span></label></div>
         <p class="muted small">Найбільша активна амплітуда + 4 мм.</p>
         <label id="quality-label" for="quality" class="control-label">Деталізація поверхні</label><select id="quality"><option value="low">Низька · 128 × 128</option><option value="medium">Середня · 256 × 256</option><option value="high">Висока · 512 × 512</option></select>
@@ -110,7 +111,25 @@ function refresh(): void {
   $('#mode-3d').setAttribute('aria-pressed', String(scene.mode === '3d'));
   setValue('#presets', currentPreset ?? '');
   const longitudinal = scene.polarization === 'longitudinal';
+  if (longitudinal) scene.display.quantity = 'displacement';
+  $('#quantity-controls').hidden = longitudinal;
   setValue('#polarization', scene.polarization);
+  const view = scene.display.longitudinalView;
+  $('#longitudinal-view-controls').hidden = !longitudinal;
+  setValue('#longitudinal-view', view);
+  $('#tracer-controls').hidden = view !== 'tracer';
+  setValue('#tracer-x', scene.display.tracerX); setValue('#tracer-y', scene.display.tracerY);
+  const viewDescriptions = {
+    particles: 'Частинки рухаються біля своїх положень рівноваги.',
+    spring: 'Пружини з’єднують сусідні частинки по x та y. Сітка стискається й розтягується у площині.',
+    arrows: 'Стрілки починаються у положеннях рівноваги. Напрямок — зміщення частинки, довжина — його величина, збільшена у g разів.',
+    tracer: 'Сліди показують траєкторії всіх частинок за один період найповільнішої хвилі. Жовта — виділена частинка. У вузлах частинки нерухомі й сліду не мають.',
+  };
+  $('#longitudinal-view-description').textContent = viewDescriptions[view];
+  if (longitudinal && view === 'tracer' && sampleLongitudinal(scene, scene.display.tracerX, scene.display.tracerY) === null)
+    $('#longitudinal-view-description').textContent = 'Обрана точка потрапила у виключену область джерела. Змініть x або y.';
+  $<HTMLInputElement>('#height-scale').disabled = false;
+
   $('#polarization-description').textContent = longitudinal
     ? 'Частинки коливаються в площині вздовж поширення хвиль. Їхнє зближення й віддалення показує згущення та розрідження.'
     : 'Мембрана коливається вгору-вниз, перпендикулярно до площини поширення хвиль.';
@@ -123,17 +142,18 @@ function refresh(): void {
   $('#section-canvas').setAttribute('aria-label', longitudinal ? 'Переріз зміщення частинок уздовж x' : 'Графік миттєвих внесків хвиль та їх суми вздовж x');
   const quantitySelect = $<HTMLSelectElement>('#quantity');
   quantitySelect.options[0].textContent = longitudinal ? 'Зміщення вздовж x · м' : 'Миттєве зміщення u · м';
+  quantitySelect.title = longitudinal ? 'Вибрана величина визначає кольори частинок, пружин, стрілок і траєкторій. Рух показує миттєве зміщення.' : 'Величина, яку показують кольори поля та висота поверхні.';
   quantitySelect.options[1].textContent = longitudinal ? 'Середній квадрат ⟨|u|²⟩ · м²' : 'Середній квадрат ⟨u²⟩ · м²';
   $('#validate').hidden = longitudinal;
   $('#validation-result').hidden = longitudinal;
   $('#quality-label').textContent = longitudinal ? 'Кількість частинок' : 'Деталізація поверхні';
   const qualitySelect = $<HTMLSelectElement>('#quality');
   ['Низька', 'Середня', 'Висока'].forEach((label, i) => {
-    const count = (longitudinal ? [19, 29, 41] : [128, 256, 512])[i];
+    const count = (longitudinal ? (view === 'spring' ? [13, 17, 21] : [19, 29, 41]) : [128, 256, 512])[i];
     qualitySelect.options[i].textContent = `${label} · ${count} × ${count}`;
   });
   $('#color-description').textContent = longitudinal
-    ? 'Колір показує фізичне зміщення вздовж x або середній квадрат повного векторного зміщення. Частинки завжди рухаються за миттєвим полем. Переріз показує uₓ, тому хвиля вздовж y може мати нульовий переріз уздовж x.'
+    ? 'Кольори частинок, пружин, стрілок і траєкторій показують миттєве зміщення вздовж x. Рух завжди відповідає миттєвому полю. Переріз показує uₓ, тому хвиля вздовж y може мати нульовий переріз уздовж x.'
     : 'Колір показує фізичне зміщення. Висота 3D збільшена у g разів; для середнього квадрата висота показує g√⟨u²⟩. ⟨u²⟩ вимірюється в м², це не потік енергії.';
   $('#model-description').textContent = longitudinal
     ? 'Поздовжні хвилі описують векторне зміщення частинок у нескінченному однорідному 2D середовищі. Плоскі хвилі зміщують частинки вздовж напрямку поширення, кругові — радіально. Амплітуда кругової хвилі задана на r = 1 м; диски r < 0,05 м виключені. Рух збільшено у g разів, тому видимі згущення не є кількісною шкалою густини.'
@@ -144,7 +164,7 @@ function refresh(): void {
   setValue('#wave-speed', scene.speed); setValue('#wave-speed-number', scene.speed);
   $('#tension').textContent = (scene.speed ** 2).toFixed(2);
   setValue('#quantity', scene.display.quantity); setValue('#average-window', scene.display.averageWindow);
-  $('#average-control').hidden = scene.display.quantity !== 'windowMean';
+  $('#average-control').hidden = longitudinal || scene.display.quantity !== 'windowMean';
   setValue('#color-scale', Number((scene.display.colorScale * 1000).toPrecision(12))); setValue('#height-scale', scene.display.heightScale);
   setValue('#quality', scene.display.quality); setChecked('#grid', scene.display.grid); setChecked('#section', scene.display.section);
   setChecked('#contributions', scene.display.contributions); setValue('#section-y', scene.display.sectionY);
@@ -239,9 +259,12 @@ $('#presets').addEventListener('change', event => {
   if (!PRESETS.some(preset => preset.id === id)) return;
   const next = presetScene(id);
   next.polarization = scene.polarization;
+  next.display.longitudinalView = scene.display.longitudinalView;
+  next.display.tracerX = scene.display.tracerX; next.display.tracerY = scene.display.tracerY;
   next.mode = scene.mode; next.display.panels = scene.display.panels;
   replaceScene(next, id);
 });
+$('#longitudinal-view').addEventListener('change', () => { scene.display.longitudinalView = $<HTMLSelectElement>('#longitudinal-view').value as SceneState['display']['longitudinalView']; changed(); url.flush(); });
 $('#polarization').addEventListener('change', () => { scene.polarization = $<HTMLSelectElement>('#polarization').value as SceneState['polarization']; changed(true); url.flush(); });
 for (const type of ['circular', 'plane'] as const) $(`#add-${type}`).addEventListener('click', () => {
   if (scene.waves.length >= MAX_WAVES) return;
@@ -263,6 +286,8 @@ numberInput('#wave-speed-number', ...LIMITS.speed, value => { scene.speed = valu
 numberInput('#height-scale', ...LIMITS.heightScale, value => { scene.display.heightScale = value; });
 numberInput('#average-window', ...LIMITS.window, value => { scene.display.averageWindow = value; });
 numberInput('#time-step', ...LIMITS.step, value => { scene.playback.step = value; });
+numberInput('#tracer-x', ...LIMITS.position, value => { scene.display.tracerX = value; });
+numberInput('#tracer-y', ...LIMITS.position, value => { scene.display.tracerY = value; });
 numberInput('#section-y', ...LIMITS.position, value => { scene.display.sectionY = value; });
 $('#quantity').addEventListener('change', event => { scene.display.quantity = (event.target as HTMLSelectElement).value as SceneState['display']['quantity']; changed(); });
 $('#quality').addEventListener('change', event => { scene.display.quality = (event.target as HTMLSelectElement).value as SceneState['display']['quality']; changed(); });

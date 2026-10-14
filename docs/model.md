@@ -142,8 +142,21 @@ Here `r` is measured from the source, `A` is the radial displacement amplitude a
 
 Contributions add as **vectors**. Mean squares use `⟨|u|²⟩`; interference cross terms therefore include the dot product of the wave directions at the observation point. Perpendicular plane waves have no displacement-variance cross term. The symmetric-window formula is applied separately to x and y components and summed.
 
-The view renders particles at equilibrium coordinates plus `g u(x,y,t)` **within the x–y plane**, in both camera modes. Their changing spacing illustrates compression/rarefaction. The multiplier exaggerates displacement and may even make particles visually cross at large values; particle density is not a quantitative density/pressure readout. Colors show `uₓ` or the selected mean square of the full vector; the cross-section always plots instantaneous **uₓ**, including its separate wave contributions. A wave along y can therefore have a zero x-displacement curve while its particles move.
+The view renders particles at equilibrium coordinates plus `g u(x,y,t)` **within the x–y plane**, in both camera modes. Their changing spacing illustrates compression/rarefaction. The multiplier exaggerates displacement and may even make particles visually cross at large values; particle density is not a quantitative density/pressure readout. Colors of particles, spring links, arrows and trajectories show instantaneous `uₓ`; the cross-section always plots instantaneous **uₓ**, including its separate wave contributions. A wave along y can therefore have a zero x-displacement curve while its particles move.
 
 Spatial phasors are cached when source parameters or particle detail change. Animation rotates those phasors in double precision on the CPU and updates one instanced GPU mesh; this works with WebGPU and WebGL 2. It does not use the transverse GPU readback diagnostic. Low/medium/high detail uses 19²/29²/41² equilibrium particles, minus masked points. Source markers and the section line remain visible.
 
 The selected model is stored in URL/JSON scenes. Older version-1 scenes open as transverse. At `c = 0`, both modes show a resting zero-displacement field as an explicit display convention; a propagating harmonic solution is undefined there.
+
+
+### Longitudinal visualization choices
+
+The longitudinal display selector offers four views: particles, spring mesh, arrows, and particle trajectories. All use the same displacement solution and the same paused time.
+
+- **Spring mesh:** particles form a 13²/17²/21² equilibrium grid for low/medium/high quality, connected to their neighbors along both x and y. Decorative coils follow the full vector displacement at both endpoints. Connections across source masks are omitted. This depicts the sampled 2D continuum, not a separate spring dynamics model.
+- **Displacement arrows:** each arrow starts at an equilibrium position and ends at that position plus `g u`. Arrowheads are scaled down for short arrows and zero vectors are hidden. Colors use the selected displacement/variance quantity.
+- **Particles with trajectories:** every moving particle has a cyan trajectory; the selected equilibrium `(tracerX,tracerY)` is marked in gray, its current position in yellow, with its trajectory highlighted in yellow and the other particles subdued. A particle at a symmetry node remains stationary, but surrounding particles still show their trails. The yellow path samples the preceding period of the slowest active frequency. It is reconstructed analytically (the harmonic field exists for all time), rather than accumulated frame history, so pause, step, reset, and imported scenes give the same trace. A tracked point inside a source mask is hidden and the control description explains how to move it.
+
+Rendering works in both 2D and 3D camera modes. Physical source parameters are shared across all views. Older links selecting the removed compression view open as particles.
+
+The longitudinal UI offers instantaneous displacement only. Physical-quantity and averaging-window controls belong to the transverse model. Older longitudinal URLs/JSON with `meanSquare` or `windowMean` are normalized to `displacement` on import.

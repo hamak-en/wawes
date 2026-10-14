@@ -32,6 +32,9 @@ export interface SceneState {
   camera: CameraState;
   camera2d: CameraState;
   display: {
+    longitudinalView: 'particles' | 'spring' | 'arrows' | 'tracer';
+    tracerX: number;
+    tracerY: number;
     quantity: 'displacement' | 'meanSquare' | 'windowMean';
     colorScale: number;
     heightScale: number;
@@ -61,7 +64,7 @@ export function defaultScene(): SceneState {
     version: 1,
     waves: [{ ...newWave('circular', 'wave-1'), x: -1 }, { ...newWave('circular', 'wave-2'), x: 1 }],
     speed: 1, mode: '2d', polarization: 'transverse', camera: structuredClone(CAMERA_3D), camera2d: structuredClone(CAMERA_2D),
-    display: { quantity: 'displacement', colorScale: 0.005, heightScale: 100, quality: 'medium', grid: true,
+    display: { longitudinalView: 'particles', tracerX: 0, tracerY: 0, quantity: 'displacement', colorScale: 0.005, heightScale: 100, quality: 'medium', grid: true,
       section: true, sectionY: 0, panels: true, contributions: true, averageWindow: 1 },
     playback: { paused: false, time: 0, rate: 1, step: 0.01 },
   };
@@ -133,10 +136,15 @@ export function validateScene(value: unknown): SceneState {
       x: number(w.x, ...LIMITS.position), y: number(w.y, ...LIMITS.position) };
   });
   const d = object(s.display), p = object(s.playback);
+  const polarization = s.polarization === undefined ? 'transverse' : choice(s.polarization, ['transverse', 'longitudinal']);
+  const quantity = choice(d.quantity, ['displacement', 'meanSquare', 'windowMean']);
   return { version: 1, waves, speed: number(s.speed, ...LIMITS.speed), mode: choice(s.mode, ['2d', '3d']),
-    polarization: s.polarization === undefined ? 'transverse' : choice(s.polarization, ['transverse', 'longitudinal']),
+    polarization,
     camera: camera(s.camera), camera2d: camera(s.camera2d, true),
-    display: { quantity: choice(d.quantity, ['displacement', 'meanSquare', 'windowMean']),
+    display: { longitudinalView: d.longitudinalView === undefined || d.longitudinalView === 'compression' ? 'particles' : choice(d.longitudinalView, ['particles', 'spring', 'arrows', 'tracer']),
+      tracerX: d.tracerX === undefined ? 0 : number(d.tracerX, ...LIMITS.position),
+      tracerY: d.tracerY === undefined ? 0 : number(d.tracerY, ...LIMITS.position),
+      quantity: polarization === 'longitudinal' ? 'displacement' : quantity,
       colorScale: colorScaleFor(waves), heightScale: number(d.heightScale, ...LIMITS.heightScale),
       quality: choice(d.quality, ['low', 'medium', 'high']), grid: boolean(d.grid), section: boolean(d.section),
       sectionY: number(d.sectionY, ...LIMITS.position), panels: boolean(d.panels), contributions: boolean(d.contributions),

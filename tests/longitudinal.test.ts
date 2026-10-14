@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { hankel1 } from '../src/physics/bessel';
-import { sampleLongitudinal } from '../src/physics/longitudinal';
+import { longitudinalCompression, prepareLongitudinal, sampleLongitudinal } from '../src/physics/longitudinal';
 import { defaultScene, newWave, presetScene, validateScene } from '../src/state';
 import { decodeScene, encodeScene } from '../src/url';
 import fixture from './fixtures/hankel1.json';
@@ -98,4 +98,100 @@ it('renders cached longitudinal phasors at the same particle coordinates as the 
   scene.speed = 0; particles.setState(scene); particles.render(scene, 0.19); particles.mesh.getMatrixAt(0, matrix);
   expect(matrix.elements[12]).toBe(-5); expect(matrix.elements[13]).toBe(-5);
   particles.mesh.geometry.dispose(); particles.mesh.material.dispose();
+});
+
+it('defaults older links to particles and rejects invalid view or tracked coordinates', () => {
+  const scene = defaultScene();
+  const { longitudinalView: _view, tracerX: _x, tracerY: _y, ...oldDisplay } = scene.display;
+  const restored = validateScene({ ...scene, display: oldDisplay });
+  expect(restored.display.longitudinalView).toBe('particles');
+  expect(validateScene({ ...scene, display: { ...scene.display, longitudinalView: 'compression' } }).display.longitudinalView).toBe('particles');
+  expect(restored.display.tracerX).toBe(0); expect(restored.display.tracerY).toBe(0);
+  expect(() => validateScene({ ...scene, display: { ...scene.display, longitudinalView: 'invalid' } })).toThrow();
+  for (const coordinate of [-5.1, 5.1, NaN, Infinity])
+    expect(() => validateScene({ ...scene, display: { ...scene.display, tracerX: coordinate } })).toThrow();
+});
+
+it('compression is minus the physical displacement divergence for plane and circular waves', () => {
+  for (const type of ['plane', 'circular'] as const) {
+    const scene = defaultScene(); scene.polarization = 'longitudinal';
+    scene.waves = [{ ...newWave(type), direction: 0.7, phase: 0.4 }];
+    const x = 0.73, y = 0.41, time = 0.23, h = 1e-5;
+    const xp = sampleLongitudinal(scene, x+h, y, time)!, xm = sampleLongitudinal(scene, x-h, y, time)!;
+    const yp = sampleLongitudinal(scene, x, y+h, time)!, ym = sampleLongitudinal(scene, x, y-h, time)!;
+    const expected = -(xp.displacement-xm.displacement+yp.displacementY-ym.displacementY)/(2*h);
+    expect(longitudinalCompression(prepareLongitudinal(scene, time)[0], x, y)![0]).toBeCloseTo(expected, 10);
+    scene.speed = 0;
+    expect(longitudinalCompression(prepareLongitudinal(scene, time)[0], 0, 0)).toEqual([0, 0]);
+  }
+});
+
+it('arrow tips and tracked particles use the full displacement vector, with all views restoring in URLs', () => {
+  const scene = defaultScene(); scene.polarization = 'longitudinal';
+  scene.waves = [{ ...newWave('plane'), direction: 0.73, phase: 0.4 }];
+  const particles = new LongitudinalParticles(), matrix = new Matrix4();
+  for (const view of ['particles', 'spring', 'arrows', 'tracer'] as const) {
+    scene.display.longitudinalView = view; scene.display.tracerX = 0.3; scene.display.tracerY = -0.2;
+    expect(decodeScene(encodeScene(scene)).display).toEqual(scene.display);
+    particles.setState(scene); particles.render(scene, 0.17);
+    if (view === 'arrows') {
+      particles.arrows.getMatrixAt(0, matrix);
+      const expected = sampleLongitudinal(scene, -5, -5, 0.17)!;
+      expect(matrix.elements[12]).toBe(-5); expect(matrix.elements[13]).toBe(-5);
+      expect(matrix.elements[0]).toBeCloseTo(scene.display.heightScale * expected.displacement, 6);
+      expect(matrix.elements[1]).toBeCloseTo(scene.display.heightScale * expected.displacementY, 6);
+    }
+    if (view === 'tracer') {
+      const expected = sampleLongitudinal(scene, 0.3, -0.2, 0.17)!;
+      expect(particles.tracked.position.x).toBeCloseTo(0.3 + scene.display.heightScale * expected.displacement, 10);
+      expect(particles.tracked.position.y).toBeCloseTo(-0.2 + scene.display.heightScale * expected.displacementY, 10);
+      const trail = particles.trail.geometry.getAttribute('position');
+      expect(trail.getX(trail.count-1)).toBeCloseTo(particles.tracked.position.x, 6);
+      expect(trail.getY(trail.count-1)).toBeCloseTo(particles.tracked.position.y, 6);
+    }
+    if (view === 'spring') expect(particles.spring.geometry.drawRange.count).toBeGreaterThan(0);
+  }
+  scene.display.longitudinalView = 'tracer'; scene.waves = [newWave('circular')];
+  scene.display.tracerX = scene.display.tracerY = 0;
+  particles.setState(scene); particles.render(scene, 0);
+  expect(particles.tracked.visible).toBe(false); expect(particles.trail.visible).toBe(false);
+  particles.group.traverse(object => {
+    if ('geometry' in object) (object.geometry as { dispose(): void }).dispose();
+    if ('material' in object) (object.material as { dispose(): void }).dispose();
+  });
+});
+
+it('spring links cover the plane and trails remain visible when the selected particle is at a symmetry node', () => {
+  const scene = defaultScene(); scene.polarization = 'longitudinal';
+  const renderer = new LongitudinalParticles();
+  scene.display.longitudinalView = 'spring'; renderer.setState(scene); renderer.render(scene, 0.17);
+  const spring = renderer.spring.geometry.getAttribute('position');
+  let minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
+  for (let i=0; i<renderer.spring.geometry.drawRange.count; i++) {
+    minX=Math.min(minX,spring.getX(i)); maxX=Math.max(maxX,spring.getX(i));
+    minY=Math.min(minY,spring.getY(i)); maxY=Math.max(maxY,spring.getY(i));
+  }
+  expect(maxX-minX).toBeGreaterThan(9); expect(maxY-minY).toBeGreaterThan(9);
+  scene.display.longitudinalView = 'tracer'; renderer.setState(scene); renderer.render(scene, 0.17);
+  expect(renderer.tracked.position.x).toBeCloseTo(0, 12);
+  expect(renderer.tracked.position.y).toBeCloseTo(0, 12);
+  expect(renderer.trails.visible).toBe(true);
+  expect(renderer.trails.geometry.drawRange.count).toBeGreaterThan(0);
+  scene.speed=0; scene.display.longitudinalView='tracer'; renderer.setState(scene); renderer.render(scene,0.17);
+  expect(renderer.trails.geometry.drawRange.count).toBe(0);
+  renderer.group.traverse(object => {
+    if ('geometry' in object) (object.geometry as { dispose(): void }).dispose();
+    if ('material' in object) (object.material as { dispose(): void }).dispose();
+  });
+});
+
+
+it('normalizes old longitudinal averaging scenes while preserving transverse modes', () => {
+  for (const quantity of ['meanSquare','windowMean'] as const) {
+    const scene=defaultScene(); scene.display.quantity=quantity;
+    expect(validateScene(scene).display.quantity).toBe(quantity);
+    scene.polarization='longitudinal';
+    expect(validateScene(scene).display.quantity).toBe('displacement');
+    expect(decodeScene(encodeScene(scene)).display.quantity).toBe('displacement');
+  }
 });

@@ -55,7 +55,7 @@ export class WaveRenderer {
     }
     this.sectionLine = new Line(new BufferGeometry().setFromPoints([new Vector3(-5, 0, 0.01), new Vector3(5, 0, 0.01)]),
       new LineBasicMaterial({ color: '#a7eee5', transparent: true, opacity: 0.7, depthTest: false }));
-    this.scene.add(this.particles.mesh);
+    this.scene.add(this.particles.group);
     const gridPoints: Vector3[] = [];
     for (let i = -5; i <= 5; i++) gridPoints.push(new Vector3(i, -5, 0), new Vector3(i, 5, 0),
       new Vector3(-5, i, 0), new Vector3(5, i, 0));

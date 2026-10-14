@@ -30,3 +30,16 @@ Parameter and camera changes use `history.replaceState`. Repeated inputs coalesc
 The color scale is derived from enabled source amplitudes as `max(A) + 0.004 m`. The stored `display.colorScale` field is retained for version-1 compatibility and recalculated on import, including older links that used a manually fixed scale.
 
 To evolve the schema, add a version-specific migration before validation and keep the playing/paused time rule explicit. Version 1 intentionally rejects future schemas rather than guessing their meaning.
+
+
+Longitudinal display settings are stored inside `display`:
+
+| Property | Meaning |
+| --- | --- |
+| `longitudinalView` | `particles`, `spring`, `arrows`, or `tracer`; defaults to `particles` for older links, including the removed `compression` view |
+| `tracerX`, `tracerY` | Equilibrium coordinates of the tracked particle, in meters, each within −5…5; default 0 |
+| `sectionY` | Position of the graph cross-section; spring links cover the full plane |
+
+These preferences survive switching back to transverse mode. Preset changes preserve the selected longitudinal view and tracked coordinates.
+
+For longitudinal scenes, `display.quantity` is normalized to `displacement`; transverse scenes retain all three physical quantities.
