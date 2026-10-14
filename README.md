@@ -72,11 +72,11 @@ The repository is `hamak-en/wawes`, with `master` as the deployment branch. One-
 
 1. Open repository **Settings → Pages → Build and deployment → Source** and select **GitHub Actions**.
 2. When ready, commit and push the implementation, including `.github/workflows/`, to `master`.
-3. Watch **Actions → Deploy to GitHub Pages**. After a successful deployment, open https://hamak-en.github.io/wawes/.
+3. Watch **Actions → Check and deploy**. After a successful deployment, open https://hamak-en.github.io/wawes/.
 
-Every subsequent push to `master` automatically runs unit tests and browser checks, builds the site, and publishes it only if those steps pass. The workflow can also be started manually from Actions on `master`. No personal access token or additional secret is required: deployment uses GitHub's workflow token. Both workflows run the unit tests, production build, and browser checks. The deployment uploads **only `dist/`**; the production base path comes from GitHub Pages metadata. The development server keeps `/` as its base path so browser tests work in CI. Public GitHub Pages hosting must be enabled by the repository owner before the first deployment.
+Every subsequent push to `master` starts one workflow: the **Check** job runs unit tests, builds the site, and runs browser checks; **Deploy to GitHub Pages** starts only after Check succeeds and publishes that same build. The workflow can also be started manually from Actions on `master`. No personal access token or additional secret is required: deployment uses GitHub's workflow token. The deployment uploads **only `dist/`**; the production base path comes from GitHub Pages metadata. The development server keeps `/` as its base path so browser tests work in CI. Public GitHub Pages hosting must be enabled by the repository owner before the first deployment.
 
-The [check workflow](.github/workflows/check.yml) runs on pushes and pull requests; the [Pages workflow](.github/workflows/pages.yml) publishes after its checks pass. `private/` remains ignored and is not an input to the site build.
+The single [CI/CD workflow](.github/workflows/pages.yml) runs on pushes and pull requests. Other branches and pull requests run only Check; deployment is restricted to `master` outside pull request events. `private/` remains ignored and is not an input to the site build.
 
 ## Layout
 
