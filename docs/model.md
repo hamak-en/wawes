@@ -1,4 +1,4 @@
-# Membrane model, version 1
+# Wave models, scene version 1
 
 The field `u(x,y,t)` is the transverse displacement of an infinite homogeneous membrane, observed in `x,y ∈ [−5,5] m`. All calculations use SI units. The observation boundary does not reflect waves. Density is fixed at `ρ = 1 kg/m²`; changing wave speed changes tension `T = ρc²`.
 
@@ -120,3 +120,30 @@ The initial scene uses two circular sources at `(−1,0)` and `(1,0) m`, with `A
 - [OpenStax: interference and superposition](https://openstax.org/books/university-physics-volume-1/pages/16-5-interference-of-waves)
 - [Membrane energy and flux](https://gustavdelius.github.io/WavesAndFluids/lecture_07.html#energy-of-membrane)
 - [SciPy/Cephes approximation source](https://github.com/scipy/xsf/blob/main/include/xsf/cephes/j0.h)
+
+
+## Longitudinal mode
+
+`polarization = longitudinal` selects an irrotational **vector displacement** in a homogeneous, infinite 2D medium, rather than transverse motion of a membrane. Each component solves the wave equation with the shared propagation speed. This is a linear displacement model; it is not a 3D air-pressure simulation and does not reuse membrane tension as an acoustic material parameter.
+
+With `n = (cos θ, sin θ)`, a plane wave is
+
+```math
+u(r,t) = n A cos(k n·r − ωt + φ).
+```
+
+A circular source produces radial displacement
+
+```math
+u(r,t) = r̂ Re[A exp(iφ) H₁⁽¹⁾(kr) / H₁⁽¹⁾(k) exp(−iωt)].
+```
+
+Here `r` is measured from the source, `A` is the radial displacement amplitude at **1 m**, and the same `r < 0.05 m` mask applies. The radial vector field is curl-free and solves the vector Helmholtz equation outside its source. In particular it is the gradient of a scalar H₀ potential, using [H₀′ = −H₁ (NIST DLMF)](https://dlmf.nist.gov/10.6.E3). H₁ is evaluated by analytic forward-mode differentiation of the existing Cephes H₀ approximation, and tested independently against system J₁/Y₁.
+
+Contributions add as **vectors**. Mean squares use `⟨|u|²⟩`; interference cross terms therefore include the dot product of the wave directions at the observation point. Perpendicular plane waves have no displacement-variance cross term. The symmetric-window formula is applied separately to x and y components and summed.
+
+The view renders particles at equilibrium coordinates plus `g u(x,y,t)` **within the x–y plane**, in both camera modes. Their changing spacing illustrates compression/rarefaction. The multiplier exaggerates displacement and may even make particles visually cross at large values; particle density is not a quantitative density/pressure readout. Colors show `uₓ` or the selected mean square of the full vector; the cross-section always plots instantaneous **uₓ**, including its separate wave contributions. A wave along y can therefore have a zero x-displacement curve while its particles move.
+
+Spatial phasors are cached when source parameters or particle detail change. Animation rotates those phasors in double precision on the CPU and updates one instanced GPU mesh; this works with WebGPU and WebGL 2. It does not use the transverse GPU readback diagnostic. Low/medium/high detail uses 19²/29²/41² equilibrium particles, minus masked points. Source markers and the section line remain visible.
+
+The selected model is stored in URL/JSON scenes. Older version-1 scenes open as transverse. At `c = 0`, both modes show a resting zero-displacement field as an explicit display convention; a propagating harmonic solution is undefined there.

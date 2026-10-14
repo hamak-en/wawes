@@ -28,6 +28,7 @@ export interface SceneState {
   waves: Wave[];
   speed: number;
   mode: '2d' | '3d';
+  polarization: 'transverse' | 'longitudinal';
   camera: CameraState;
   camera2d: CameraState;
   display: {
@@ -59,7 +60,7 @@ export function defaultScene(): SceneState {
   return {
     version: 1,
     waves: [{ ...newWave('circular', 'wave-1'), x: -1 }, { ...newWave('circular', 'wave-2'), x: 1 }],
-    speed: 1, mode: '2d', camera: structuredClone(CAMERA_3D), camera2d: structuredClone(CAMERA_2D),
+    speed: 1, mode: '2d', polarization: 'transverse', camera: structuredClone(CAMERA_3D), camera2d: structuredClone(CAMERA_2D),
     display: { quantity: 'displacement', colorScale: 0.005, heightScale: 100, quality: 'medium', grid: true,
       section: true, sectionY: 0, panels: true, contributions: true, averageWindow: 1 },
     playback: { paused: false, time: 0, rate: 1, step: 0.01 },
@@ -133,6 +134,7 @@ export function validateScene(value: unknown): SceneState {
   });
   const d = object(s.display), p = object(s.playback);
   return { version: 1, waves, speed: number(s.speed, ...LIMITS.speed), mode: choice(s.mode, ['2d', '3d']),
+    polarization: s.polarization === undefined ? 'transverse' : choice(s.polarization, ['transverse', 'longitudinal']),
     camera: camera(s.camera), camera2d: camera(s.camera2d, true),
     display: { quantity: choice(d.quantity, ['displacement', 'meanSquare', 'windowMean']),
       colorScale: colorScaleFor(waves), heightScale: number(d.heightScale, ...LIMITS.heightScale),

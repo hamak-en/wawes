@@ -192,3 +192,36 @@ test('speed accepts zero, small decimals and values above the slider range', asy
   await expect(input).toHaveValue('0');
   expect(await page.evaluate(() => window.wawes.state.speed)).toBe(0);
 });
+
+test('longitudinal particles, projections, presets and shared state work', async ({ page, browser }) => {
+  await page.locator('#play-pause').click();
+  await page.getByLabel('Тип коливань').selectOption('longitudinal');
+  await expect(page.locator('#gain-label')).toHaveText('Рух частинок g');
+  await expect(page.locator('#section-formula')).toHaveText('uₓ(x, y₀, t)');
+  await expect(page.locator('#membrane-description')).toBeHidden();
+  await expect(page.locator('#longitudinal-medium')).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath('longitudinal-circular.png') });
+  await page.getByLabel('Навчальні сцени').selectOption('inPhase');
+  expect(await page.evaluate(() => window.wawes.state.polarization)).toBe('longitudinal');
+  await page.locator('#play-pause').click();
+  await page.locator('#reset-time').click();
+  expect(await page.evaluate(() => window.wawes.sample(0, 0)?.displacement)).toBeCloseTo(0.002, 10);
+  const wave = page.locator('.wave-card').first();
+  await wave.locator('input[type=number][data-property=direction]').fill('90');
+  await page.locator('#viewport canvas').click();
+  expect(await page.evaluate(() => window.wawes.sample(0, 0)?.displacement)).toBeCloseTo(0.001, 10);
+  await page.screenshot({ path: test.info().outputPath('longitudinal-2d.png') });
+  await page.locator('#quantity').selectOption('windowMean');
+  await page.locator('#mode-3d').click();
+  await page.locator('#step').click();
+  await page.screenshot({ path: test.info().outputPath('longitudinal-3d.png') });
+  const state = await page.evaluate(() => window.wawes.state);
+  const context = await browser.newContext(), other = await context.newPage();
+  await other.goto(page.url()); await other.waitForFunction(() => window.wawes?.ready);
+  expect(await other.evaluate(() => window.wawes.state)).toEqual(state);
+  await expect(other.getByLabel('Тип коливань')).toHaveValue('longitudinal');
+  await context.close();
+  await page.getByLabel('Тип коливань').selectOption('transverse');
+  await expect(page.locator('#gain-label')).toHaveText('Висота g');
+  await expect(page.locator('#membrane-description')).toBeVisible();
+});

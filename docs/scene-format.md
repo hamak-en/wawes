@@ -9,6 +9,7 @@ Version **1** contains:
 | `version` | Exactly `1`; unknown versions fail validation |
 | `waves` | Up to eight complete wave objects, including disabled sources |
 | `speed` | Shared speed `c` in m/s |
+| `polarization` | `transverse` or `longitudinal`; omitted in older version-1 scenes defaults to `transverse` |
 | `mode` | `2d` or `3d` |
 | `camera`, `camera2d` | Position, target and zoom for each view |
 | `display` | Quantity, derived color scale, height scale, detail, grid, section, section position, panels, contributions and averaging window |

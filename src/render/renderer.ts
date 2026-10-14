@@ -1,6 +1,6 @@
 import {
   WebGPURenderer, Scene, Mesh, PlaneGeometry, MeshBasicNodeMaterial, PerspectiveCamera, OrthographicCamera,
-  Vector2, Vector3, Color, DoubleSide, Line, BufferGeometry, LineBasicMaterial, CircleGeometry, RingGeometry,
+  Vector2, Vector3, Color, DoubleSide, Line, LineSegments, BufferGeometry, LineBasicMaterial, CircleGeometry, RingGeometry,
   RenderTarget, FloatType, NearestFilter, NoToneMapping,
 } from 'three/webgpu';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -9,6 +9,7 @@ import type { SceneState, CameraState } from '../state';
 import { CAMERA_2D, CAMERA_3D, EXTENT, MASK_RADIUS } from '../state';
 import { createFieldShader } from './shader';
 import { sampleField } from '../physics/model';
+import { LongitudinalParticles } from './longitudinal';
 
 const QUALITY = { low: 128, medium: 256, high: 512 };
 export const WAVE_COLORS = ['#78ded3', '#ffb079', '#ba9aff', '#ffd36e', '#79b7ff', '#ee87ad', '#a3db84', '#d6dce4'];
@@ -21,11 +22,13 @@ export class WaveRenderer {
   readonly perspective = new PerspectiveCamera(42, 1, 0.05, 250);
   readonly orthographic = new OrthographicCamera(-6, 6, 6, -6, 0.05, 250);
   readonly shader = createFieldShader();
+  private readonly particles = new LongitudinalParticles();
   private controls!: OrbitControls;
   private surface!: Mesh<PlaneGeometry, MeshBasicNodeMaterial>;
   private readonly mode = uniform(0);
   private markers: Mesh[] = [];
   private sectionLine: Line;
+  private particleGrid: LineSegments;
   private lastState!: SceneState;
   private lastQuality = '';
   private lastMode = '';
@@ -52,6 +55,13 @@ export class WaveRenderer {
     }
     this.sectionLine = new Line(new BufferGeometry().setFromPoints([new Vector3(-5, 0, 0.01), new Vector3(5, 0, 0.01)]),
       new LineBasicMaterial({ color: '#a7eee5', transparent: true, opacity: 0.7, depthTest: false }));
+    this.scene.add(this.particles.mesh);
+    const gridPoints: Vector3[] = [];
+    for (let i = -5; i <= 5; i++) gridPoints.push(new Vector3(i, -5, 0), new Vector3(i, 5, 0),
+      new Vector3(-5, i, 0), new Vector3(5, i, 0));
+    this.particleGrid = new LineSegments(new BufferGeometry().setFromPoints(gridPoints),
+      new LineBasicMaterial({ color: '#8ea3b5', transparent: true, opacity: 0.15 }));
+    this.scene.add(this.particleGrid);
     this.sectionLine.renderOrder = 4; this.scene.add(this.sectionLine);
     this.observer = new ResizeObserver(() => this.resize()); this.observer.observe(host);
   }
@@ -115,6 +125,8 @@ export class WaveRenderer {
     this.lastState = state;
     this.lastMode = state.mode;
     this.mode.value = state.mode === '3d' ? 1 : 0;
+    this.surface.visible = state.polarization === 'transverse';
+    this.particles.setState(state);
     if (switched || restoreCamera) {
       this.controls?.dispose();
       this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -141,7 +153,8 @@ export class WaveRenderer {
       this.lastQuality = geometryKey;
       this.renderer.setPixelRatio(Math.min(devicePixelRatio, state.display.quality === 'low' ? 1 : 2));
     }
-    this.scene.getObjectByName('zero-plane')!.visible = state.mode === '3d' && state.display.grid;
+    this.scene.getObjectByName('zero-plane')!.visible = state.mode === '3d' && state.polarization === 'transverse' && state.display.grid;
+    this.particleGrid.visible = state.polarization === 'longitudinal' && state.display.grid;
     this.sectionLine.visible = state.display.section;
     this.sectionLine.position.y = state.display.sectionY;
     this.updateMarkers(); this.resize();
@@ -181,7 +194,8 @@ export class WaveRenderer {
   }
   render(time: number): void {
     if (this.validationRunning) return;
-    this.shader.update(this.lastState, time);
+    if (this.lastState.polarization === 'longitudinal') this.particles.render(this.lastState, time);
+    else this.shader.update(this.lastState, time);
     this.controls.update(); this.renderer.render(this.scene, this.camera);
     const size = this.renderer.getSize(new Vector2());
     for (const { element, position } of this.labels) {
@@ -243,7 +257,7 @@ export class WaveRenderer {
   }
   dispose(): void {
     this.observer.disconnect(); this.controls?.dispose();
-    this.scene.traverse(object => { if (object instanceof Mesh || object instanceof Line) {
+    this.scene.traverse(object => { if (object instanceof Mesh || object instanceof Line || object instanceof LineSegments) {
       object.geometry.dispose(); const materials = Array.isArray(object.material) ? object.material : [object.material];
       materials.forEach(m => m.dispose()); } });
     this.renderer.dispose(); this.labelLayer.remove(); this.renderer.domElement.remove();

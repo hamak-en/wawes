@@ -1,5 +1,6 @@
 import type { SceneState } from './state';
 import { prepareWaves, samplePrepared } from './physics/model';
+import { prepareLongitudinal, sampleLongitudinalPrepared } from './physics/longitudinal';
 import { WAVE_COLORS } from './render/renderer';
 
 export function drawSection(canvas: HTMLCanvasElement, scene: SceneState, time: number): { clipped: boolean; max: number } {
@@ -9,8 +10,9 @@ export function drawSection(canvas: HTMLCanvasElement, scene: SceneState, time: 
   }
   const ctx = canvas.getContext('2d')!; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, width, height);
   const left = 53, right = width - 18, top = 13, bottom = height - 28, middle = (top + bottom) / 2;
-  const scale = scene.display.colorScale, prepared = prepareWaves(scene, time), count = Math.max(240, Math.floor(width));
-  const values = Array.from({ length: count + 1 }, (_, i) => samplePrepared(prepared, (i / count - 0.5) * 10,
+  const longitudinal = scene.polarization === 'longitudinal';
+  const scale = scene.display.colorScale, prepared = longitudinal ? prepareLongitudinal(scene, time) : prepareWaves(scene, time), count = Math.max(240, Math.floor(width));
+  const values = Array.from({ length: count + 1 }, (_, i) => (longitudinal ? sampleLongitudinalPrepared : samplePrepared)(prepared, (i / count - 0.5) * 10,
     scene.display.sectionY, scene.display.averageWindow));
   const max = values.reduce((m, v) => Math.max(m, Math.abs(v?.displacement ?? 0)), 0);
   ctx.font = '12px system-ui'; ctx.textBaseline = 'middle'; ctx.strokeStyle = '#293542'; ctx.lineWidth = 1;

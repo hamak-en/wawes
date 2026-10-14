@@ -50,15 +50,18 @@ export interface FieldSample {
 export function samplePrepared(prepared: PreparedWave[], x: number, y: number, averageWindow: number): FieldSample | null {
   const values = prepared.map(w => contribution(w, x, y));
   if (values.some(v => v === null)) return null;
-  const complex = values as Complex[];
+  return sampleComplex(values as Complex[], prepared.map(p => p.wave.frequency), averageWindow);
+}
+
+export function sampleComplex(complex: Complex[], frequencies: number[], averageWindow: number): FieldSample {
   let displacement = 0, meanSquare = 0, windowMean = 0;
   for (let i = 0; i < complex.length; i++) {
-    const [a, b] = complex[i], f = prepared[i].wave.frequency;
+    const [a, b] = complex[i], f = frequencies[i];
     displacement += a;
     meanSquare += (a * a + b * b) / 2;
     windowMean += (a * a + b * b + (a * a - b * b) * sinc(TAU * f * averageWindow)) / 2;
     for (let j = i + 1; j < complex.length; j++) {
-      const [c, d] = complex[j], f2 = prepared[j].wave.frequency;
+      const [c, d] = complex[j], f2 = frequencies[j];
       if (f === f2) meanSquare += a * c + b * d;
       windowMean += (a * c + b * d) * sinc(Math.PI * (f - f2) * averageWindow)
         + (a * c - b * d) * sinc(Math.PI * (f + f2) * averageWindow);

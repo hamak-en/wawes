@@ -1,6 +1,6 @@
 # Хвилі — Wave Interference Laboratory
 
-A browser-only teaching tool for exploring harmonic waves on an infinite membrane. Ukrainian controls, a signed-displacement field in 2D, and the same field as a movable 3D surface. Built with TypeScript, Vite, Three.js WebGPURenderer and one shared TSL shader.
+A browser-only teaching tool for exploring transverse membrane waves and longitudinal particle waves in an infinite 2D medium. Ukrainian controls, 2D/3D cameras, a transverse displacement surface, and longitudinal particles moving in the plane. Built with TypeScript, Vite, Three.js WebGPURenderer and one shared TSL shader.
 
 [GitHub Pages demo](https://hamak-en.github.io/wawes/) (available after the deployment workflow runs).
 

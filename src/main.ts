@@ -5,6 +5,7 @@ import { decodeScene, UrlStore } from './url';
 import { WaveRenderer, WAVE_COLORS } from './render/renderer';
 import { drawSection } from './plot';
 import { sampleField } from './physics/model';
+import { sampleLongitudinal } from './physics/longitudinal';
 import { validationScenes } from './validation';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -29,6 +30,7 @@ app.innerHTML = `
   <div class="workspace">
     <aside class="sidebar" aria-label="Налаштування сцени">
       <section class="panel-block">
+        <label class="control-label" for="polarization">Тип коливань</label><select id="polarization"><option value="transverse">Поперечні хвилі</option><option value="longitudinal">Поздовжні хвилі</option></select><p id="polarization-description" class="muted small"></p>
         <div class="section-heading"><h2>Джерела хвиль</h2><span id="wave-count" class="tiny-label"></span></div>
         <div id="waves"></div>
         <div class="add-buttons"><button id="add-circular" class="button ghost">＋ Кругова</button><button id="add-plane" class="button ghost">＋ Плоска</button></div>
@@ -37,22 +39,22 @@ app.innerHTML = `
         <div class="section-heading"><h2>Середовище</h2></div>
         <label class="control-label" for="wave-speed">Швидкість хвилі <span>м/с</span></label>
         <div class="range-row"><input id="wave-speed" type="range" min="0" max="3" step="any"><input id="wave-speed-number" aria-label="Швидкість хвилі, м/с" type="number" min="0" step="any"></div>
-        <p class="muted small">ρ = 1 кг/м² · T = <span id="tension">1</span> Н/м<br>Нескінченна мембрана, без відбиттів.</p>
+        <p id="membrane-description" class="muted small">ρ = 1 кг/м² · T = <span id="tension">1</span> Н/м<br>Нескінченна мембрана, без відбиттів.</p><p id="longitudinal-medium" class="muted small" hidden>Однорідне нескінченне 2D середовище, без відбиттів. Частинки коливаються в площині x–y.</p>
       </section>
       <section class="panel-block display-block">
         <div class="section-heading"><h2>Відображення</h2></div>
         <label for="quantity" class="control-label">Фізична величина</label>
         <select id="quantity"><option value="displacement">Миттєве зміщення u · м</option><option value="meanSquare">Середній квадрат ⟨u²⟩ · м²</option><option value="windowMean">Середній квадрат у вікні · м²</option></select>
         <div id="average-control"><label class="control-label" for="average-window">Вікно усереднення τ <span>с</span></label><input id="average-window" type="number" min="0.01" max="20" step="0.01"></div>
-        <div class="two-controls"><label class="control-label" for="color-scale">Шкала u · авто<span>± мм<input id="color-scale" type="number" readonly></span></label><label class="control-label" for="height-scale">Висота g<span>×<input id="height-scale" type="number" min="1" max="500" step="1"></span></label></div>
+        <div class="two-controls"><label class="control-label" for="color-scale">Шкала u · авто<span>± мм<input id="color-scale" type="number" readonly></span></label><label class="control-label" for="height-scale"><b id="gain-label" style="font-weight:inherit">Висота g</b><span>×<input id="height-scale" type="number" min="1" max="500" step="1"></span></label></div>
         <p class="muted small">Найбільша активна амплітуда + 4 мм.</p>
-        <label for="quality" class="control-label">Деталізація поверхні</label><select id="quality"><option value="low">Низька · 128 × 128</option><option value="medium">Середня · 256 × 256</option><option value="high">Висока · 512 × 512</option></select>
+        <label id="quality-label" for="quality" class="control-label">Деталізація поверхні</label><select id="quality"><option value="low">Низька · 128 × 128</option><option value="medium">Середня · 256 × 256</option><option value="high">Висока · 512 × 512</option></select>
         <label class="check-row"><input id="grid" type="checkbox">Координатна сітка та рівень z = 0</label>
         <label class="check-row"><input id="section" type="checkbox">Графік перерізу</label>
         <p id="sampling-warning" class="notice" hidden></p>
       </section>
       <section class="panel-block utility-block"><button id="export" class="button ghost">Експорт JSON</button><button id="import" class="button ghost">Імпорт JSON</button><input id="import-file" type="file" accept="application/json,.json" hidden></section>
-      <details class="panel-block help"><summary>Про модель і керування</summary><p>Плоскі та кругові гармонічні хвилі додаються за принципом суперпозиції. Кругові хвилі описує функція Ганкеля; амплітуда A задана на відстані 1 м. Диски r &lt; 0,05 м виключені з поля.</p><p>Колір показує фізичне зміщення. Висота 3D збільшена у g разів; для середнього квадрата висота показує g√⟨u²⟩. ⟨u²⟩ вимірюється в м², це не потік енергії.</p><p>Параметри змінюють стаціонарне поле без перехідного процесу. Для реальної мембрани потрібні малі фізичні нахили.</p><p>3D: перетягування — обертання, права кнопка / Shift — зміщення, колесо — масштаб. 2D: перетягування правою кнопкою — зміщення, колесо — масштаб.</p><p>Пробіл — пауза · → — один крок · H — панелі.</p><button id="validate" class="button ghost">Перевірити фізику на GPU</button><p id="validation-result" class="small muted" role="status"></p><a href="https://github.com/hamak-en/wawes" target="_blank" rel="noreferrer">Код і документація ↗</a></details>
+      <details class="panel-block help"><summary>Про модель і керування</summary><p id="model-description">Плоскі та кругові гармонічні хвилі додаються за принципом суперпозиції. Кругові хвилі описує функція Ганкеля; амплітуда A задана на відстані 1 м. Диски r &lt; 0,05 м виключені з поля.</p><p id="color-description">Колір показує фізичне зміщення. Висота 3D збільшена у g разів; для середнього квадрата висота показує g√⟨u²⟩. ⟨u²⟩ вимірюється в м², це не потік енергії.</p><p>Параметри змінюють стаціонарне поле без перехідного процесу. Для реальної мембрани потрібні малі фізичні нахили.</p><p>3D: перетягування — обертання, права кнопка / Shift — зміщення, колесо — масштаб. 2D: перетягування правою кнопкою — зміщення, колесо — масштаб.</p><p>Пробіл — пауза · → — один крок · H — панелі.</p><button id="validate" class="button ghost">Перевірити фізику на GPU</button><p id="validation-result" class="small muted" role="status"></p><a href="https://github.com/hamak-en/wawes" target="_blank" rel="noreferrer">Код і документація ↗</a></details>
     </aside>
     <main class="main-stage">
       <section class="visualization" aria-label="Візуалізація інтерференції">
@@ -60,7 +62,7 @@ app.innerHTML = `
         <div id="viewport"><div id="loading" class="loading">Готуємо поле хвиль…</div></div>
         <div class="view-bottom"><div class="color-legend"><div id="legend-bar" class="legend-bar"></div><div class="legend-ticks"><span id="legend-low">−4 мм</span><span id="legend-zero">0</span><span id="legend-high">+4 мм</span></div></div><div class="view-tools"><span id="backend" class="backend-tag">Ініціалізація</span><span id="fps">— FPS</span><button id="reset-camera" class="text-button">↺ Камера</button></div></div>
       </section>
-      <section id="section-panel" class="section-panel"><div class="plot-heading"><h2>Переріз <span>u(x, y₀, t)</span></h2><div class="plot-controls"><label for="section-y">y₀, м<input id="section-y" type="number" min="-5" max="5" step="0.1"></label><label class="check-row"><input id="contributions" type="checkbox">Окремі хвилі</label></div></div><div id="plot-legend" class="plot-legend"></div><canvas id="section-canvas" aria-label="Графік миттєвих внесків хвиль та їх суми вздовж x"></canvas></section>
+      <section id="section-panel" class="section-panel"><div class="plot-heading"><h2>Переріз <span id="section-formula">u(x, y₀, t)</span></h2><div class="plot-controls"><label for="section-y">y₀, м<input id="section-y" type="number" min="-5" max="5" step="0.1"></label><label class="check-row"><input id="contributions" type="checkbox">Окремі хвилі</label></div></div><div id="plot-legend" class="plot-legend"></div><canvas id="section-canvas" aria-label="Графік миттєвих внесків хвиль та їх суми вздовж x"></canvas></section>
     </main>
   </div><div id="toast" class="toast" role="status" aria-live="polite" hidden></div>`;
 
@@ -107,6 +109,37 @@ function refresh(): void {
   $('#mode-2d').setAttribute('aria-pressed', String(scene.mode === '2d'));
   $('#mode-3d').setAttribute('aria-pressed', String(scene.mode === '3d'));
   setValue('#presets', currentPreset ?? '');
+  const longitudinal = scene.polarization === 'longitudinal';
+  setValue('#polarization', scene.polarization);
+  $('#polarization-description').textContent = longitudinal
+    ? 'Частинки коливаються в площині вздовж поширення хвиль. Їхнє зближення й віддалення показує згущення та розрідження.'
+    : 'Мембрана коливається вгору-вниз, перпендикулярно до площини поширення хвиль.';
+  $('#membrane-description').hidden = longitudinal;
+  $('#longitudinal-medium').hidden = !longitudinal;
+  $('#mode-3d span').textContent = longitudinal ? 'частинки' : 'поверхня';
+  $('#gain-label').textContent = longitudinal ? 'Рух частинок g' : 'Висота g';
+  $('#height-scale').title = longitudinal ? 'Множник видимого зміщення частинок; не змінює фізичну амплітуду.' : 'Множник висоти поверхні в 3D.';
+  $('#section-formula').textContent = longitudinal ? 'uₓ(x, y₀, t)' : 'u(x, y₀, t)';
+  $('#section-canvas').setAttribute('aria-label', longitudinal ? 'Переріз зміщення частинок уздовж x' : 'Графік миттєвих внесків хвиль та їх суми вздовж x');
+  const quantitySelect = $<HTMLSelectElement>('#quantity');
+  quantitySelect.options[0].textContent = longitudinal ? 'Зміщення вздовж x · м' : 'Миттєве зміщення u · м';
+  quantitySelect.options[1].textContent = longitudinal ? 'Середній квадрат ⟨|u|²⟩ · м²' : 'Середній квадрат ⟨u²⟩ · м²';
+  $('#validate').hidden = longitudinal;
+  $('#validation-result').hidden = longitudinal;
+  $('#quality-label').textContent = longitudinal ? 'Кількість частинок' : 'Деталізація поверхні';
+  const qualitySelect = $<HTMLSelectElement>('#quality');
+  ['Низька', 'Середня', 'Висока'].forEach((label, i) => {
+    const count = (longitudinal ? [19, 29, 41] : [128, 256, 512])[i];
+    qualitySelect.options[i].textContent = `${label} · ${count} × ${count}`;
+  });
+  $('#color-description').textContent = longitudinal
+    ? 'Колір показує фізичне зміщення вздовж x або середній квадрат повного векторного зміщення. Частинки завжди рухаються за миттєвим полем. Переріз показує uₓ, тому хвиля вздовж y може мати нульовий переріз уздовж x.'
+    : 'Колір показує фізичне зміщення. Висота 3D збільшена у g разів; для середнього квадрата висота показує g√⟨u²⟩. ⟨u²⟩ вимірюється в м², це не потік енергії.';
+  $('#model-description').textContent = longitudinal
+    ? 'Поздовжні хвилі описують векторне зміщення частинок у нескінченному однорідному 2D середовищі. Плоскі хвилі зміщують частинки вздовж напрямку поширення, кругові — радіально. Амплітуда кругової хвилі задана на r = 1 м; диски r < 0,05 м виключені. Рух збільшено у g разів, тому видимі згущення не є кількісною шкалою густини.'
+    : 'Плоскі та кругові гармонічні хвилі додаються за принципом суперпозиції. Кругові хвилі описує функція Ганкеля; амплітуда A задана на відстані 1 м. Диски r < 0,05 м виключені з поля.';
+
+
   $<HTMLInputElement>('#wave-speed').max = String(Math.max(3, scene.speed));
   setValue('#wave-speed', scene.speed); setValue('#wave-speed-number', scene.speed);
   $('#tension').textContent = (scene.speed ** 2).toFixed(2);
@@ -126,7 +159,9 @@ function refresh(): void {
   $('#play-pause').setAttribute('aria-label', scene.playback.paused ? 'Відтворити' : 'Пауза');
   $('#play-pause').setAttribute('title', scene.playback.paused ? 'Відтворити (Пробіл)' : 'Пауза (Пробіл)');
   const instantaneous = scene.display.quantity === 'displacement';
-  $('#field-label').textContent = instantaneous ? 'u(x, y, t) · миттєве зміщення' : scene.display.quantity === 'meanSquare' ? '⟨u²⟩ · нескінченний час' : `⟨u²⟩τ · τ = ${scene.display.averageWindow} с`;
+  $('#field-label').textContent = longitudinal
+    ? (instantaneous ? 'uₓ(x, y, t) · поздовжні хвилі' : scene.display.quantity === 'meanSquare' ? '⟨|u|²⟩ · поздовжні хвилі' : `⟨|u|²⟩τ · τ = ${scene.display.averageWindow} с`)
+    : instantaneous ? 'u(x, y, t) · миттєве зміщення' : scene.display.quantity === 'meanSquare' ? '⟨u²⟩ · нескінченний час' : `⟨u²⟩τ · τ = ${scene.display.averageWindow} с`;
   $('#legend-bar').classList.toggle('variance', !instantaneous);
   const scale = scene.display.colorScale * 1000;
   const scaleText = Number(scale.toPrecision(8));
@@ -139,12 +174,16 @@ function refresh(): void {
 function refreshSamplingNotice(): void {
   const smallestWavelength = Math.min(...scene.waves.filter(w => w.enabled && w.amplitude > 0).map(w => scene.speed / w.frequency));
   const viewport = $('#viewport');
-  const resolution = scene.mode === '3d'
+  const resolution = scene.polarization === 'longitudinal'
+    ? ({ low: 19, medium: 29, high: 41 }[scene.display.quality] - 1) / 10
+    : scene.mode === '3d'
     ? { low: 128, medium: 256, high: 512 }[scene.display.quality] / 10
     : Math.min(viewport.clientWidth, viewport.clientHeight) / 11.7 * scene.camera2d.zoom
       * Math.min(devicePixelRatio, scene.display.quality === 'low' ? 1 : 2);
   const notice = $('#sampling-warning'); notice.hidden = scene.speed === 0 || resolution * smallestWavelength >= 12;
-  notice.textContent = scene.mode === '3d'
+  notice.textContent = scene.polarization === 'longitudinal'
+    ? 'Короткі хвилі не розрізняються за цієї кількості частинок. Збільште їхню кількість або зменште частоту.'
+    : scene.mode === '3d'
     ? 'Короткі хвилі не розрізняються за поточної деталізації. Підвищте деталізацію або зменште частоту.'
     : 'Короткі хвилі не розрізняються за поточного масштабу. Наблизьте поле або зменште частоту.';
 }
@@ -199,9 +238,11 @@ $('#presets').addEventListener('change', event => {
   const id = (event.target as HTMLSelectElement).value as PresetId;
   if (!PRESETS.some(preset => preset.id === id)) return;
   const next = presetScene(id);
+  next.polarization = scene.polarization;
   next.mode = scene.mode; next.display.panels = scene.display.panels;
   replaceScene(next, id);
 });
+$('#polarization').addEventListener('change', () => { scene.polarization = $<HTMLSelectElement>('#polarization').value as SceneState['polarization']; changed(true); url.flush(); });
 for (const type of ['circular', 'plane'] as const) $(`#add-${type}`).addEventListener('click', () => {
   if (scene.waves.length >= MAX_WAVES) return;
   scene.waves.push(newWave(type)); changed(true, true); url.flush();
@@ -337,7 +378,7 @@ if (new URLSearchParams(location.search).has('qa')) {
     get ready() { return ready; }, get state() { return snapshot(); }, get backend() { return renderer?.backend; },
     get camera() { return renderer?.cameraState(); },
     load: (next: unknown) => replaceScene(validateScene(next)),
-    sample: (x: number, y: number) => sampleField(snapshot(), x, y),
+    sample: (x: number, y: number) => scene.polarization === 'longitudinal' ? sampleLongitudinal(snapshot(), x, y) : sampleField(snapshot(), x, y),
     validate: () => renderer!.validate(validationScenes()),
   } });
 }

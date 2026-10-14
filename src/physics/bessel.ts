@@ -60,3 +60,23 @@ export function hankel0(x: number): [number, number] {
   if (!(x > 0) || !Number.isFinite(x)) throw new RangeError('Hankel argument must be finite and positive.');
   return x <= 5 ? hankelSmall(x, doubleArithmetic) : hankelLarge(x, doubleArithmetic);
 }
+
+// Forward-mode differentiation of the existing rational approximations.
+// H₁(x) = −H₀′(x); no finite-difference step or extra coefficient table is needed.
+type Dual = [value: number, derivative: number];
+const derivativeArithmetic: Arithmetic<Dual> = {
+  constant: n => [n, 0],
+  add: (a, b) => [a[0] + b[0], a[1] + b[1]],
+  sub: (a, b) => [a[0] - b[0], a[1] - b[1]],
+  mul: (a, b) => [a[0] * b[0], a[1] * b[0] + a[0] * b[1]],
+  div: (a, b) => [a[0] / b[0], (a[1] - a[0] / b[0] * b[1]) / b[0]],
+  sin: a => [Math.sin(a[0]), Math.cos(a[0]) * a[1]],
+  cos: a => [Math.cos(a[0]), -Math.sin(a[0]) * a[1]],
+  log: a => [Math.log(a[0]), a[1] / a[0]],
+  sqrt: a => [Math.sqrt(a[0]), a[1] / (2 * Math.sqrt(a[0]))],
+};
+export function hankel1(x: number): [number, number] {
+  if (!(x > 0) || !Number.isFinite(x)) throw new RangeError('Hankel argument must be finite and positive.');
+  const [j, y] = x <= 5 ? hankelSmall<Dual>([x, 1], derivativeArithmetic) : hankelLarge<Dual>([x, 1], derivativeArithmetic);
+  return [-j[1], -y[1]];
+}
