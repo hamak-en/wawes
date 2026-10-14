@@ -1,0 +1,17 @@
+# Local planning documents
+/private/
+
+# Dependencies and build output
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Local environment configuration
+.env
+.env.*
+!.env.example
+
+# Logs and macOS metadata
+*.log
+.DS_Store
